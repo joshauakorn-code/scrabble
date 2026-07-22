@@ -83,6 +83,10 @@ stays responsive, with an "AI thinking…" indicator while it computes.
 
 ## Dictionary
 
+> **Deploying under a different path?** The production build is served from
+> `/scrabble/` (a GitHub Pages project site). If you fork or rename the repo,
+> change the `base` in `vite.config.ts` to match.
+
 The bundled word list is **ENABLE** (`public/dict/enable1.txt`), which is in the
 public domain and freely redistributable. On load it is fetched once (with a
 "Loading dictionary…" state) and compiled into:
