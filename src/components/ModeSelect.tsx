@@ -49,7 +49,7 @@ export default function ModeSelect({ onStart }: Props) {
                 : 'bg-slate-700 text-slate-200 hover:bg-slate-600',
             ].join(' ')}
           >
-            Hotseat (2P)
+            Two Player Mode
           </button>
         </div>
 
