@@ -54,6 +54,8 @@ export interface ScrabbleController {
   /** Rack of the current player minus tiles placed provisionally. */
   activeRack: Tile[];
   isAiTurn: boolean;
+  /** True briefly after a shuffle so the UI can animate the rack. */
+  shuffling: boolean;
 
   startGame: (config: GameConfig) => void;
   resetToMenu: () => void;
@@ -65,6 +67,8 @@ export interface ScrabbleController {
   recallAt: (row: number, col: number) => void;
   recallAll: () => void;
   shuffleRack: () => void;
+  /** Move a rack tile so it sits at another rack tile's position. */
+  reorderRack: (fromId: string, toId: string) => void;
   commitPlay: () => void;
   exchangeTiles: (tileIds: string[]) => void;
   passTurn: () => void;
@@ -80,6 +84,7 @@ export function useScrabble(): ScrabbleController {
   const [pendingBlank, setPendingBlank] = useState<PendingBlank | null>(null);
   const [aiThinking, setAiThinking] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [shuffling, setShuffling] = useState(false);
 
   const workerRef = useRef<Worker | null>(null);
   const reqId = useRef(0);
@@ -246,6 +251,30 @@ export function useScrabble(): ScrabbleController {
       player.rack = shuffle(player.rack);
       return next;
     });
+    // Trigger the shuffle animation, then clear the flag so it can replay.
+    setShuffling(false);
+    requestAnimationFrame(() => {
+      setShuffling(true);
+      window.setTimeout(() => setShuffling(false), 500);
+    });
+  }, []);
+
+  const reorderRack = useCallback((fromId: string, toId: string) => {
+    if (fromId === toId) return;
+    setState((prev) => {
+      if (!prev) return prev;
+      const next = {
+        ...prev,
+        players: prev.players.map((p) => ({ ...p, rack: p.rack.slice() })),
+      };
+      const rack = next.players[next.currentPlayer].rack;
+      const from = rack.findIndex((t) => t.id === fromId);
+      const to = rack.findIndex((t) => t.id === toId);
+      if (from < 0 || to < 0) return prev;
+      const [moved] = rack.splice(from, 1);
+      rack.splice(to, 0, moved);
+      return next;
+    });
   }, []);
 
   const clearTurnUi = useCallback(() => {
@@ -375,6 +404,7 @@ export function useScrabble(): ScrabbleController {
     preview,
     activeRack,
     isAiTurn,
+    shuffling,
     startGame,
     resetToMenu,
     selectTile,
@@ -385,6 +415,7 @@ export function useScrabble(): ScrabbleController {
     recallAt,
     recallAll,
     shuffleRack,
+    reorderRack,
     commitPlay,
     exchangeTiles,
     passTurn,

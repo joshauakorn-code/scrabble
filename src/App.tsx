@@ -4,10 +4,13 @@ import {
   DragEndEvent,
   PointerSensor,
   TouchSensor,
+  KeyboardSensor,
   useSensor,
   useSensors,
   closestCenter,
+  CollisionDetection,
 } from '@dnd-kit/core';
+import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { useScrabble, GameConfig } from './state/useScrabble';
 import { RACK_SIZE } from './engine/types';
 import ModeSelect from './components/ModeSelect';
@@ -27,7 +30,18 @@ export default function App() {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 120, tolerance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
+
+  // Prefer the individual squares/rack tiles over the whole-rack container so
+  // that dragging a rack tile onto a neighbour reorders it (instead of the
+  // large 'rack' droppable swallowing the collision). The 'rack' container
+  // still wins when the pointer is over empty rack space (e.g. an empty rack).
+  const collisionDetection: CollisionDetection = (args) => {
+    const hits = closestCenter(args);
+    const specific = hits.filter((h) => h.id !== 'rack');
+    return specific.length > 0 ? specific : hits;
+  };
 
   if (!g.state || !g.config) {
     return <ModeSelect onStart={(cfg: GameConfig) => g.startGame(cfg)} />;
@@ -41,22 +55,42 @@ export default function App() {
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over) return;
-    const tileId = (active.data.current as { tileId?: string })?.tileId;
+    const activeData = active.data.current as { tileId?: string; origin?: string } | undefined;
+    const tileId = activeData?.tileId;
     if (!tileId) return;
-    const overData = over.data.current as { row?: number; col?: number; rack?: boolean } | undefined;
-    if (overData?.rack) {
-      // Dropped back on the rack: recall if it was a provisional board tile.
-      const prov = g.provisional.find((p) => p.tile.id === tileId);
-      if (prov) g.recallAt(prov.row, prov.col);
-      return;
-    }
+    const overData = over.data.current as
+      | { row?: number; col?: number; rack?: boolean; origin?: string; tileId?: string }
+      | undefined;
+
+    // Dropped on a board square: place the tile there.
     if (overData && typeof overData.row === 'number' && typeof overData.col === 'number') {
       g.placeTileAt(tileId, overData.row, overData.col);
+      return;
+    }
+
+    // Dropped on the rack (its empty area, or over another rack tile).
+    const onRack = overData?.rack || overData?.origin === 'rack';
+    if (onRack) {
+      if (activeData?.origin === 'board') {
+        // A provisional board tile dragged back to the rack: recall it.
+        const prov = g.provisional.find((p) => p.tile.id === tileId);
+        if (prov) g.recallAt(prov.row, prov.col);
+        return;
+      }
+      // A rack tile dropped over another rack tile: reorder.
+      if (
+        activeData?.origin === 'rack' &&
+        overData?.origin === 'rack' &&
+        overData.tileId &&
+        overData.tileId !== tileId
+      ) {
+        g.reorderRack(tileId, overData.tileId);
+      }
     }
   };
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+    <DndContext sensors={sensors} collisionDetection={collisionDetection} onDragEnd={handleDragEnd}>
       <div className="min-h-screen text-slate-100">
         <header className="flex items-center justify-between px-4 py-3 border-b border-white/10">
           <h1 className="text-xl font-black tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-amber-300 to-emerald-300">
@@ -116,6 +150,7 @@ export default function App() {
                 selectedTileId={g.selectedTileId}
                 onSelect={g.selectTile}
                 interactive={interactive}
+                shuffling={g.shuffling}
               />
 
               <Controls
