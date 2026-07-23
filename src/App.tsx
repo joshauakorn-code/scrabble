@@ -2,7 +2,7 @@ import { useState } from 'react';
 import {
   DndContext,
   DragEndEvent,
-  PointerSensor,
+  MouseSensor,
   TouchSensor,
   KeyboardSensor,
   useSensor,
@@ -28,8 +28,12 @@ export default function App() {
   const [showExchange, setShowExchange] = useState(false);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 120, tolerance: 6 } }),
+    // Mouse for desktop, touch for mobile (distance-based so a short swipe on a
+    // tile starts a drag while a tap still selects it), keyboard for a11y.
+    // NOTE: PointerSensor was replaced with MouseSensor + TouchSensor because
+    // PointerSensor did not reliably start drags in this setup.
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { distance: 10 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
